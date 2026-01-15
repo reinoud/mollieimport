@@ -2,3 +2,4 @@
 .idea
 config.ini
 *pyc
+export.csv
