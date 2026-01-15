@@ -1,0 +1,2 @@
+email,customer_id,mandate_id,subscription_id,status,error
+a@example.com,,,,ok,
