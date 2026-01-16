@@ -12,7 +12,7 @@ Options:
 The script reads Mollie API credentials from the [mollie] section of the config file.
 """
 
-from typing import Optional
+from typing import Optional, Dict
 import argparse
 import sys
 import csv
@@ -34,28 +34,31 @@ def parse_args(argv: Optional[list] = None):
     parser.add_argument("-t", "--test", action="store_true", help="Dry run; don't POST to Mollie")
     parser.add_argument("-c", "--config", default="config.ini", help="Path to config file")
     parser.add_argument("-e", "--export", default="export.csv", help="Path to CSV export file")
+    parser.add_argument("-s", "--skip-iban-validation", action="store_true", help="Skip IBAN checksum validation")
     return parser.parse_args(argv)
 
 
-def process_customer(api: MollieAPI, row: dict, logger) -> dict:
+def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str, object]:
     """Process a single customer row: create customer, import mandate, create subscription.
 
-    Args:
-        api: MollieAPI instance
-        row: dict with customer data
-        logger: logger instance
-
-    Returns:
-        dict with keys: customer, mandate, subscription containing Mollie responses or error info.
+    The input `row` uses Dutch CSV headers. Map them to Mollie fields here.
     """
     result = {"customer": None, "mandate": None, "subscription": None, "errors": []}
 
+    # Map Dutch headers to fields expected by MollieAPI
+    customer_payload = {
+        "email": row.get("Email"),
+        "given_name": row.get("Voor naam"),
+        "family_name": row.get("Naam"),
+        "customer_reference": str(row.get("LidNr") or ""),
+    }
+
     try:
-        cust_resp = api.create_customer(row)
+        cust_resp = api.create_customer(customer_payload)
         result["customer"] = cust_resp
-        logger.info("Created customer for %s: %s", row.get("email"), cust_resp.get("id", cust_resp))
+        logger.info("Created customer for %s: %s", customer_payload.get("email"), str(cust_resp.get("id") or cust_resp))
     except Exception as exc:
-        logger.error("Failed to create customer for %s: %s", row.get("email"), exc)
+        logger.error("Failed to create customer for %s: %s", customer_payload.get("email"), exc)
         result["errors"].append(str(exc))
         return result
 
@@ -64,31 +67,38 @@ def process_customer(api: MollieAPI, row: dict, logger) -> dict:
         customer_id = cust_resp.get("id") or cust_resp.get("resource")
 
     if not customer_id:
-        # In test mode or unexpected shape, try to continue using a placeholder id
         customer_id = cust_resp.get("id") if isinstance(cust_resp, dict) else None
 
     if not customer_id:
-        logger.warning("No customer id returned for %s; proceeding in test mode or skipping mandate/subscription", row.get("email"))
+        logger.warning("No customer id returned for %s; proceeding in test mode or skipping mandate/subscription", customer_payload.get("email"))
         return result
 
-    # Import mandate
+    # Mandate payload mapping
+    mandate_payload = {
+        "iban": row.get("IBAN"),
+        "mandate_reference": str(row.get("MachtigingsID") or ""),
+        "mandate_signature_date": row.get("Datum Ondertekening"),
+        "given_name": row.get("Voor naam"),
+        "family_name": row.get("Naam"),
+    }
+
     try:
-        mandate_resp = api.import_mandate(customer_id, row)
+        mandate_resp = api.import_mandate(customer_id, mandate_payload)
         result["mandate"] = mandate_resp
-        logger.info("Imported mandate for %s: %s", row.get("email"), mandate_resp.get("id", mandate_resp))
+        logger.info("Imported mandate for %s: %s", customer_payload.get("email"), str(mandate_resp.get("id") or mandate_resp))
     except Exception as exc:
-        logger.error("Failed to import mandate for %s: %s", row.get("email"), exc)
+        logger.error("Failed to import mandate for %s: %s", customer_payload.get("email"), exc)
         result["errors"].append(str(exc))
         return result
 
-    # Create subscription
+    # Subscription plan mapping
+    plan = {"amount": row.get("Bedrag"), "currency": row.get("currency", "EUR"), "interval": row.get("interval", "1 year"), "description": row.get("description", "Yearly subscription")}
     try:
-        plan = {"amount": row.get("amount"), "currency": row.get("currency", "EUR"), "interval": row.get("interval", "1 year"), "description": row.get("description", "Yearly subscription")}
         sub_resp = api.create_subscription(customer_id, plan)
         result["subscription"] = sub_resp
-        logger.info("Created subscription for %s: %s", row.get("email"), sub_resp.get("id", sub_resp))
+        logger.info("Created subscription for %s: %s", customer_payload.get("email"), str(sub_resp.get("id") or sub_resp))
     except Exception as exc:
-        logger.error("Failed to create subscription for %s: %s", row.get("email"), exc)
+        logger.error("Failed to create subscription for %s: %s", customer_payload.get("email"), exc)
         result["errors"].append(str(exc))
 
     return result
@@ -126,8 +136,8 @@ def main(argv: Optional[list] = None):
     out_rows = []
 
     try:
-        for row in read_customers(args.export):
-            email = row.get("email")
+        for row in read_customers(args.export, validate_iban_flag=not args.skip_iban_validation, logger=logger):
+            email = row.get("Email")
             logger.info("Processing %s", email)
             res = process_customer(api, row, logger)
 
