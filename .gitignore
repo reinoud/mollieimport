@@ -2,5 +2,5 @@
 .idea
 config.ini
 *pyc
-export.csv
+*.csv
 *.log

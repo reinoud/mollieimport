@@ -1,3 +1,0 @@
-email,customer_id,customer_idempotency,mandate_id,mandate_idempotency,subscription_id,subscription_idempotency,status,error
-test@stigter.net,,cbc2caf60a6d10c292cebe0240a36dacc8d251b70996a2016c251e87205b7118,,,,,ok,
-test@stigter.net,,cbc2caf60a6d10c292cebe0240a36dacc8d251b70996a2016c251e87205b7118,,,,,ok,
