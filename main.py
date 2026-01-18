@@ -17,6 +17,7 @@ import argparse
 import sys
 import csv
 import os
+from datetime import date as _date, datetime
 
 from logger_setup import setup_logging
 from config_loader import load_config
@@ -28,7 +29,7 @@ def parse_args(argv: Optional[list] = None):
     """Parse command-line arguments.
 
     Returns:
-        argparse.Namespace with attributes: test (bool), config (str), export (str)
+        argparse.Namespace with attributes: test (bool), config (str), export (str), skip_iban_validation (bool)
     """
     parser = argparse.ArgumentParser(description="Import customers, mandates and subscriptions into Mollie")
     parser.add_argument("-t", "--test", action="store_true", help="Dry run; don't POST to Mollie")
@@ -38,10 +39,48 @@ def parse_args(argv: Optional[list] = None):
     return parser.parse_args(argv)
 
 
+def next_same_day_in_year(orig_date: _date, from_date: Optional[_date] = None) -> _date:
+    """Return the next date (including this year) that has the same month/day as orig_date.
+
+    If the month/day this year is on or after `from_date` (default today), return that date in the
+    current year; otherwise return the same month/day in the next year. Keeps the original year
+    only for constructing the month/day and does not depend on orig_date.year.
+
+    Args:
+        orig_date: date object with original month/day information
+        from_date: date to consider as "today"; defaults to today
+    Returns:
+        datetime.date representing the next occurrence of orig_date's month/day
+    """
+    if from_date is None:
+        from_date = _date.today()
+    try:
+        candidate = _date(from_date.year, orig_date.month, orig_date.day)
+    except ValueError:
+        # Handle Feb 29 on non-leap years: choose Mar 1 as Mollie-friendly alternative
+        if orig_date.month == 2 and orig_date.day == 29:
+            candidate = _date(from_date.year, 3, 1)
+        else:
+            raise
+    if candidate < from_date:
+        # Next year
+        try:
+            candidate = _date(from_date.year + 1, orig_date.month, orig_date.day)
+        except ValueError:
+            # Feb 29 -> Mar 1 fallback
+            if orig_date.month == 2 and orig_date.day == 29:
+                candidate = _date(from_date.year + 1, 3, 1)
+            else:
+                raise
+    return candidate
+
+
 def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str, object]:
     """Process a single customer row: create customer, import mandate, create subscription.
 
     The input `row` uses Dutch CSV headers. Map them to Mollie fields here.
+    The subscription start date will be set to the same month/day as the original
+    `Datum Ondertekening` (mandate signature date), in the next occurrence on or after today.
     """
     result = {"customer": None, "mandate": None, "subscription": None, "errors": []}
 
@@ -91,8 +130,21 @@ def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str
         result["errors"].append(str(exc))
         return result
 
-    # Subscription plan mapping
+    # Subscription plan mapping - keep amount as float from csv_reader
+    # Determine subscription start date to match original mandate signature day/month
+    start_date = None
+    if row.get("Datum Ondertekening"):
+        try:
+            orig = row.get("Datum Ondertekening")
+            if hasattr(orig, "day"):
+                start_date = next_same_day_in_year(orig)
+        except Exception as exc:
+            logger.warning("Could not compute subscription start date for %s: %s", customer_payload.get("email"), exc)
+
     plan = {"amount": row.get("Bedrag"), "currency": row.get("currency", "EUR"), "interval": row.get("interval", "1 year"), "description": row.get("description", "Yearly subscription")}
+    if start_date:
+        plan["start_date"] = start_date
+
     try:
         sub_resp = api.create_subscription(customer_id, plan)
         result["subscription"] = sub_resp

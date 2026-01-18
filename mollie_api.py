@@ -130,16 +130,31 @@ class MollieAPI:
         Args:
             customer_id: Mollie customer id
             plan: dict with keys: amount (float), currency (str), interval (e.g., '1 year')
+                  optional key: start_date (datetime.date) - if present the subscription will be
+                  scheduled to start on that date (ISO format is used for the Mollie payload).
 
-        The idempotency key is based on the customer_id, amount and interval to ensure a repeated
-        subscription creation attempt for the same plan doesn't duplicate.
+        The idempotency key is based on the customer_id, amount, interval and start_date (if any)
+        to ensure a repeated subscription creation attempt for the same plan doesn't duplicate.
         """
         payload = {
             "amount": {"value": f"{plan.get('amount'):.2f}", "currency": plan.get("currency", "EUR")},
             "interval": plan.get("interval", "1 year"),
             "description": plan.get("description", "Yearly membership"),
         }
+        # Include startDate if provided (expecting a date object or ISO string)
+        start = plan.get("start_date") or plan.get("startDate")
+        if start is not None:
+            # accept date object or string
+            if hasattr(start, "isoformat"):
+                payload["startDate"] = start.isoformat()
+                start_str = start.isoformat()
+            else:
+                payload["startDate"] = str(start)
+                start_str = str(start)
+        else:
+            start_str = ""
+
         # Normalize amount and interval into the key
         amount_str = f"{plan.get('amount'):.2f}" if plan.get('amount') is not None else ""
-        key = self._deterministic_key("subscription", customer_id, amount_str, plan.get("interval", ""))
+        key = self._deterministic_key("subscription", customer_id, amount_str, plan.get("interval", ""), start_str)
         return self._post(f"/customers/{customer_id}/subscriptions", payload, idempotency_key=key)

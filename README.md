@@ -7,7 +7,7 @@ Dit project importeert ledengegevens uit een CSV-export en maakt via de Mollie A
 
 Belangrijke kenmerken
 - Leest Nederlandse exportbestanden (semicolon-delimited) met Nederlandse kolomnamen.
-- Valideert IBANs met `python-stdnum`.
+- Valideert IBANs met `python-stdnum` (kan met een CLI-vlag uitgeschakeld worden).
 - Gebruikt deterministische Idempotency-keys (SHA-256) zodat her-runs geen duplicaten aanmaken.
 - Schrijft een resultaatbestand `imported_<basename>.csv` met per-regel status en idempotency-waarden.
 - Logging naar `import.log` (rotating file handler).
@@ -27,7 +27,7 @@ Het script verwacht dat de export CSV Nederlandse header-namen gebruikt en meest
 - `Email` (e-mail adres)
 - `Voor naam` (voornamen)
 - `Naam` (achternaam)
-- `IBAN` (IBAN, wordt gevalideerd)
+- `IBAN` (IBAN, wordt gevalideerd tenzij uitgeschakeld)
 - `MachtigingsID` (mandate reference / ID)
 - `Datum Ondertekening` (datum handtekening machtiging, verwacht DD-MM-YYYY of YYYY-MM-DD)
 - `Bedrag` (bedrag per incasso; kan komma gebruiken als decimale scheidingsteken)
@@ -79,21 +79,29 @@ Gebruik (kort)
 .venv/bin/python main.py --export export.csv
 ```
 
-Gedetailleerd gedrag
-- IBAN: gevalideerd met `python-stdnum`; rijen met ongeldige IBAN worden overgeslagen.
-- Datum: ondersteunt `DD-MM-YYYY`, `DD-MM-YY` en `YYYY-MM-DD` voor `Datum Ondertekening`.
-- Bedrag: ondersteunt komma als decimaal scheidingsteken en wordt genormaliseerd naar een float.
-- Idempotency: keys zijn SHA-256 hashes over logische velden:
+CLI opties
+- `--test`, `-t`: dry-run mode; geen POSTs naar Mollie.
+- `--config`, `-c`: pad naar config bestand (default `config.ini`).
+- `--export`, `-e`: pad naar CSV exportbestand (default `export.csv`).
+- `--skip-iban-validation`, `-s`: sla IBAN-check over (valideren kan fouten in exportbestand veroorzaken; logs zullen dan waarschuwen).
+
+Subscription start-datum
+- De script zet een abonnement (subscription) zo dat het begint op dezelfde dag-in-het-jaar als de originele machtiging (`Datum Ondertekening`).
+  - Bijvoorbeeld: als `Datum Ondertekening` 06-01-2021 is en vandaag is 2026-01-19 dan de nieuwe subscription start op 2026-01-06 (of op 2027-01-06 als de datum dit jaar al gepasseerd was).
+  - Voor Feb 29 als originele datum wordt in niet-schrikkeljaren 1 maart gebruikt als fallback.
+
+Idempotency details
+- Deterministische idempotency-keys (SHA-256) worden gegenereerd uit logische velden, zodat her-runs niet leiden tot duplicaten:
   - Customer: `customer|{email}`
   - Mandate: `mandate|{customer_id}|{MachtigingsID}`
-  - Subscription: `subscription|{customer_id}|{amount:.2f}|{interval}`
+  - Subscription: `subscription|{customer_id}|{amount:.2f}|{interval}|{startDate}` (opmerking: `startDate` is toegevoegd aan de key zodat subscriptions met verschillende startdata verschillend worden behandeld)
 
 Foutafhandeling en retry
 - Transient serverfouten (5xx) en 429 worden herhaald met exponentiële backoff (max 5 pogingen).
 - Permanente 4xx fouten worden gelogd en gemarkeerd in het resultaatbestand als `failed`.
 
 Tests
-- De repo bevat pytest tests in de map `tests/`. Tests gebruiken dry-run mode en controleren CSV parsing en output.
+- De repo bevat pytest tests in de map `tests/`. Tests gebruiken dry-run mode en controleren CSV parsing, date logic en API wrapper behavior.
 
 Test-run:
 
@@ -111,8 +119,3 @@ Aanpassingen/uitbreidingen
 - Duplicate-detectie: momenteel wordt er een nieuwe customer aangemaakt op basis van idempotency; als je wilt dat we eerst op `customer_reference` of `Email` zoeken en hergebruiken, kan ik die pre-check toevoegen.
 - Output: ipv een apart `imported_*.csv` kan ik de originele CSV uitbreiden met extra kolommen; laat weten wat je voorkeur heeft.
 
-Contact
-Als je wilt dat ik veldmappingen verander (bijv. als jouw export andere Nederlandse header-namen gebruikt), geef de exacte headers en ik pas de mapper in `main.py` en `csv_reader.py` aan.
-
----
-README bijgewerkt om overeen te komen met de Nederlandse export-velden en de huidige implementatie.

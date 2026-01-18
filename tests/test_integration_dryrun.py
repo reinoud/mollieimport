@@ -24,3 +24,6 @@ def test_end_to_end_dryrun(tmp_path, monkeypatch):
         # ensure idempotency columns are present
         assert "customer_idempotency" in rows[0]
         assert rows[0]["customer_idempotency"] != ""
+        # ensure subscription idempotency present
+        assert "subscription_idempotency" in rows[0]
+        assert rows[0]["subscription_idempotency"] != ""
