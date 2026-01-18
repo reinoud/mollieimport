@@ -41,7 +41,22 @@ class MollieAPI:
         if self.test:
             if self.logger:
                 self.logger.info("[TEST MODE] POST %s payload=%s idempotency=%s", url, payload, idempotency_key)
-            return {"_test": True, "url": url, "payload": payload, "idempotency": idempotency_key}
+            # Create a deterministic fake id for customers/mandates/subscriptions so the
+            # rest of the pipeline can continue in dry-run mode.
+            fake = {"_test": True, "url": url, "payload": payload, "idempotency": idempotency_key}
+            # derive stable short id
+            key_source = idempotency_key or hashlib.sha256(repr((path, payload)).encode("utf-8")).hexdigest()
+            short = key_source[:12]
+            if "/customers" in path and path.rstrip("/").endswith("/customers"):
+                fake_id = f"cst_{short}"
+                fake["id"] = fake_id
+            elif "/mandates" in path:
+                fake_id = f"mdt_{short}"
+                fake["id"] = fake_id
+            elif "/subscriptions" in path:
+                fake_id = f"sub_{short}"
+                fake["id"] = fake_id
+            return fake
 
         # Simple retry logic
         attempts = 0

@@ -153,6 +153,12 @@ def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str
         logger.error("Failed to create subscription for %s: %s", customer_payload.get("email"), exc)
         result["errors"].append(str(exc))
 
+    # Record the chosen subscription start date (ISO string) so we can write it to the output CSV
+    if start_date:
+        result["subscription_startDate"] = start_date.isoformat()
+    else:
+        result["subscription_startDate"] = ""
+
     return result
 
 
@@ -162,7 +168,7 @@ def write_imported_csv(out_path: str, rows: list):
     Each row in `rows` should be a dict containing: email, customer_id, mandate_id, subscription_id, status, error
     and optional idempotency columns.
     """
-    fieldnames = ["email", "customer_id", "customer_idempotency", "mandate_id", "mandate_idempotency", "subscription_id", "subscription_idempotency", "status", "error"]
+    fieldnames = ["email", "customer_id", "customer_idempotency", "mandate_id", "mandate_idempotency", "subscription_id", "subscription_idempotency", "subscription_startDate", "status", "error"]
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -194,6 +200,8 @@ def main(argv: Optional[list] = None):
             res = process_customer(api, row, logger)
 
             out = {"email": email, "customer_id": "", "customer_idempotency": "", "mandate_id": "", "mandate_idempotency": "", "subscription_id": "", "subscription_idempotency": "", "status": "", "error": ""}
+            # include subscription_startDate column
+            out["subscription_startDate"] = ""
             if res.get("customer") and isinstance(res.get("customer"), dict):
                 out["customer_id"] = res["customer"].get("id") or ""
                 out["customer_idempotency"] = res["customer"].get("idempotency") or ""
@@ -203,6 +211,8 @@ def main(argv: Optional[list] = None):
             if res.get("subscription") and isinstance(res.get("subscription"), dict):
                 out["subscription_id"] = res["subscription"].get("id") or ""
                 out["subscription_idempotency"] = res["subscription"].get("idempotency") or ""
+            # subscription_startDate may be present in the result
+            out["subscription_startDate"] = res.get("subscription_startDate") or ""
 
             if res.get("errors"):
                 out["status"] = "failed"
