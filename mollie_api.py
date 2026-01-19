@@ -4,6 +4,18 @@ import hashlib
 from typing import Dict, Optional
 
 
+def _deterministic_key(*parts: str) -> str:
+    """Create a deterministic idempotency key from given parts.
+
+    The key is a SHA-256 hex digest of the joined parts. This ensures the same logical
+    action produces the same idempotency key across runs.
+    """
+    joined = "|".join([p or "" for p in parts])
+    h = hashlib.sha256(joined.encode("utf-8")).hexdigest()
+    # Mollie accepts reasonably long idempotency keys; keep full hash for safety
+    return h
+
+
 class MollieAPI:
     """Minimal Mollie API wrapper with create customer, import mandate, and create subscription.
 
@@ -20,17 +32,6 @@ class MollieAPI:
         self.session = requests.Session()
         self.session.headers.update({"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"})
         self.logger = logger
-
-    def _deterministic_key(self, *parts: str) -> str:
-        """Create a deterministic idempotency key from given parts.
-
-        The key is a SHA-256 hex digest of the joined parts. This ensures the same logical
-        action produces the same idempotency key across runs.
-        """
-        joined = "|".join([p or "" for p in parts])
-        h = hashlib.sha256(joined.encode("utf-8")).hexdigest()
-        # Mollie accepts reasonably long idempotency keys; keep full hash for safety
-        return h
 
     def _post(self, path: str, payload: Dict, idempotency_key: Optional[str] = None) -> Dict:
         url = f"{self.BASE}{path}"
@@ -116,7 +117,7 @@ class MollieAPI:
         if customer.get("customer_reference"):
             payload["metadata"] = {"customer_reference": customer.get("customer_reference")}
 
-        key = self._deterministic_key("customer", customer.get("email", ""))
+        key = _deterministic_key("customer", customer.get("email", ""))
         return self._post("/customers", payload, idempotency_key=key)
 
     def import_mandate(self, customer_id: str, mandate: Dict) -> Dict:
@@ -136,7 +137,7 @@ class MollieAPI:
             "mandateReference": mandate.get("mandate_reference"),
             "signatureDate": mandate.get("mandate_signature_date").isoformat(),
         }
-        key = self._deterministic_key("mandate", customer_id, mandate.get("mandate_reference", ""))
+        key = _deterministic_key("mandate", customer_id, mandate.get("mandate_reference", ""))
         return self._post(f"/customers/{customer_id}/mandates", payload, idempotency_key=key)
 
     def create_subscription(self, customer_id: str, plan: Dict) -> Dict:
@@ -171,5 +172,5 @@ class MollieAPI:
 
         # Normalize amount and interval into the key
         amount_str = f"{plan.get('amount'):.2f}" if plan.get('amount') is not None else ""
-        key = self._deterministic_key("subscription", customer_id, amount_str, plan.get("interval", ""), start_str)
+        key = _deterministic_key("subscription", customer_id, amount_str, plan.get("interval", ""), start_str)
         return self._post(f"/customers/{customer_id}/subscriptions", payload, idempotency_key=key)
