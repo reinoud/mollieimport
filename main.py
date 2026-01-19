@@ -17,7 +17,7 @@ import argparse
 import sys
 import csv
 import os
-from datetime import date as _date, datetime
+from datetime import date as _date
 
 from logger_setup import setup_logging
 from config_loader import load_config
@@ -109,7 +109,8 @@ def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str
         customer_id = cust_resp.get("id") if isinstance(cust_resp, dict) else None
 
     if not customer_id:
-        logger.warning("No customer id returned for %s; proceeding in test mode or skipping mandate/subscription", customer_payload.get("email"))
+        logger.warning("No customer id returned for %s; proceeding in test mode or skipping mandate/subscription",
+                       customer_payload.get("email"))
         return result
 
     # Mandate payload mapping
@@ -124,7 +125,8 @@ def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str
     try:
         mandate_resp = api.import_mandate(customer_id, mandate_payload)
         result["mandate"] = mandate_resp
-        logger.info("Imported mandate for %s: %s", customer_payload.get("email"), str(mandate_resp.get("id") or mandate_resp))
+        logger.info("Imported mandate for %s: %s", customer_payload.get("email"),
+                    str(mandate_resp.get("id") or mandate_resp))
     except Exception as exc:
         logger.error("Failed to import mandate for %s: %s", customer_payload.get("email"), exc)
         result["errors"].append(str(exc))
@@ -141,14 +143,23 @@ def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str
         except Exception as exc:
             logger.warning("Could not compute subscription start date for %s: %s", customer_payload.get("email"), exc)
 
-    plan = {"amount": row.get("Bedrag"), "currency": row.get("currency", "EUR"), "interval": row.get("interval", "1 year"), "description": row.get("description", "Yearly subscription")}
+    if row.get("Bedrag") == '25':
+        description = "Singelpark Zilver "
+    elif row.get("Bedrag") == '10':
+        description = "Singelpark Brons"
+    else:
+        description = f"Singelpark jaarlijkse donatie {row.get('Bedrag')} EUR"
+
+    plan = {"amount": row.get("Bedrag"), "currency": row.get("currency", "EUR"),
+            "interval": row.get("interval", "1 year"), "description": description}
     if start_date:
         plan["start_date"] = start_date
 
     try:
         sub_resp = api.create_subscription(customer_id, plan)
         result["subscription"] = sub_resp
-        logger.info("Created subscription for %s: %s", customer_payload.get("email"), str(sub_resp.get("id") or sub_resp))
+        logger.info("Created subscription for %s: %s", customer_payload.get("email"),
+                    str(sub_resp.get("id") or sub_resp))
     except Exception as exc:
         logger.error("Failed to create subscription for %s: %s", customer_payload.get("email"), exc)
         result["errors"].append(str(exc))
@@ -168,7 +179,8 @@ def write_imported_csv(out_path: str, rows: list):
     Each row in `rows` should be a dict containing: email, customer_id, mandate_id, subscription_id, status, error
     and optional idempotency columns.
     """
-    fieldnames = ["email", "customer_id", "customer_idempotency", "mandate_id", "mandate_idempotency", "subscription_id", "subscription_idempotency", "subscription_startDate", "status", "error"]
+    fieldnames = ["email", "customer_id", "customer_idempotency", "mandate_id", "mandate_idempotency",
+                  "subscription_id", "subscription_idempotency", "subscription_startDate", "status", "error"]
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -195,13 +207,20 @@ def main(argv: Optional[list] = None):
 
     try:
         for row in read_customers(args.export, validate_iban_flag=not args.skip_iban_validation, logger=logger):
+            # Don't import rows with end date 31-12-2025
+            # rows with 31/12/2026 are also skipped, since their last paymant has been done in 2025
+            if row.get("Datum Eind") == _date(2025, 12, 31) or row.get("Datum Eind") == _date(2026, 12, 31):
+                logger.info("Skipping %s due to 'Datum Eind' == 31-12-2025", row.get("Email"))
+                continue
+
             email = row.get("Email")
             logger.info("Processing %s", email)
             res = process_customer(api, row, logger)
 
-            out = {"email": email, "customer_id": "", "customer_idempotency": "", "mandate_id": "", "mandate_idempotency": "", "subscription_id": "", "subscription_idempotency": "", "status": "", "error": ""}
+            out = {"email": email, "customer_id": "", "customer_idempotency": "", "mandate_id": "",
+                   "mandate_idempotency": "", "subscription_id": "", "subscription_idempotency": "", "status": "",
+                   "error": "", "subscription_startDate": ""}
             # include subscription_startDate column
-            out["subscription_startDate"] = ""
             if res.get("customer") and isinstance(res.get("customer"), dict):
                 out["customer_id"] = res["customer"].get("id") or ""
                 out["customer_idempotency"] = res["customer"].get("idempotency") or ""
