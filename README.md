@@ -13,7 +13,8 @@ Belangrijke kenmerken
 - Logging naar `import.log` (rotating file handler).
 
 Inhoud van de repository
-- `main.py` – CLI orchestrator
+- `main.py` – CLI orchestrator voor het importeren van CSV-data naar Mollie
+- `list_subscriptions.py` – Script om alle subscriptions van Mollie op te halen en als JSON te tonen
 - `mollie_api.py` – Mollie API wrapper (create_customer, import_mandate, create_subscription)
 - `csv_reader.py` – CSV-lezer en validatie (ondersteunt Nederlandse headers en datumformaten)
 - `config_loader.py` – config loader voor `config.ini`
@@ -70,13 +71,13 @@ Gebruik (kort)
 .venv/bin/python -m pip install -r requirements.txt
 
 # voer dry-run uit (geen echte Mollie-calls)
-.venv/bin/python main.py --test --export export.csv
+.venv/bin/python main.py --test --export test_export.csv
 ```
 
 - Productierun (echte Mollie-calls; zorg voor correcte APIkey):
 
 ```bash
-.venv/bin/python main.py --export export.csv
+.venv/bin/python main.py --export test_export.csv
 ```
 
 CLI opties
@@ -114,6 +115,37 @@ Test-run:
 Debug en logging
 - Logfile: `import.log` (RotatingFileHandler). Console-output toont WARNING en ERROR berichten.
 - Voor debugging kun je `--test` gebruiken en `import.log` inspecteren voor details over payloads en idempotency-keys.
+
+Subscriptions ophalen van Mollie
+Het script `list_subscriptions.py` haalt alle subscriptions op van alle customers in je Mollie account en toont ze als JSON.
+
+Gebruik:
+
+```bash
+# Toon alle subscriptions in je terminal
+.venv/bin/python list_subscriptions.py
+
+# Sla output op in een bestand
+.venv/bin/python list_subscriptions.py --output subscriptions.json
+
+# Gebruik alternatieve config
+.venv/bin/python list_subscriptions.py --config custom_config.ini
+
+# Verbose logging voor debugging
+.venv/bin/python list_subscriptions.py --verbose
+```
+
+CLI opties voor list_subscriptions.py:
+- `--config`, `-c`: pad naar config bestand (default `config.ini`)
+- `--output`, `-o`: pad naar output bestand (default: stdout)
+- `--verbose`, `-v`: toon gedetailleerde logging output
+
+De output bevat:
+- `total_count`: totaal aantal subscriptions
+- `subscriptions`: array met alle subscription objecten
+- Voor elke subscription wordt `_customerInfo` toegevoegd met customer id, naam en email
+
+Zie `example_subscriptions_output.json` voor een voorbeeld van de JSON structuur.
 
 Aanpassingen/uitbreidingen
 - Duplicate-detectie: momenteel wordt er een nieuwe customer aangemaakt op basis van idempotency; als je wilt dat we eerst op `customer_reference` of `Email` zoeken en hergebruiken, kan ik die pre-check toevoegen.

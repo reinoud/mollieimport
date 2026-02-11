@@ -4,7 +4,7 @@ from main import main
 
 def test_end_to_end_dryrun(tmp_path, monkeypatch):
     # create a simple csv with Dutch headers and semicolon delimiter
-    p = tmp_path / "export.csv"
+    p = tmp_path / "test_export.csv"
     with open(p, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh, delimiter=';')
         writer.writerow(["Email","Voor naam","Naam","IBAN","MachtigingsID","Datum Ondertekening","Bedrag"])

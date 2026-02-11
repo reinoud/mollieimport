@@ -7,7 +7,7 @@ Usage:
 Options:
     --test, -t    Dry-run mode: do not perform POST requests to Mollie.
     --config, -c  Path to config.ini (default: config.ini).
-    --export, -e  Path to export CSV (default: export.csv).
+    --export, -e  Path to export CSV (default: test_export.csv).
 
 The script reads Mollie API credentials from the [mollie] section of the config file.
 """
@@ -151,7 +151,7 @@ def process_customer(api: MollieAPI, row: Dict[str, object], logger) -> Dict[str
         description = f"Singelpark jaarlijkse donatie {row.get('Bedrag')} EUR"
 
     plan = {"amount": row.get("Bedrag"), "currency": row.get("currency", "EUR"),
-            "interval": row.get("interval", "1 year"), "description": description}
+            "interval": row.get("interval", "12 months"), "description": description}
     if start_date:
         plan["start_date"] = start_date
 

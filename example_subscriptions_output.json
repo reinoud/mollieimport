@@ -1,0 +1,72 @@
+{
+  "total_count": 2,
+  "subscriptions": [
+    {
+      "id": "sub_rVKGtNd6s3",
+      "mode": "live",
+      "createdAt": "2023-01-15T10:30:00+00:00",
+      "status": "active",
+      "amount": {
+        "value": "12.50",
+        "currency": "EUR"
+      },
+      "times": null,
+      "interval": "12 months",
+      "startDate": "2023-01-15",
+      "description": "Yearly membership",
+      "method": "directdebit",
+      "mandateId": "mdt_h3gAaD5zP",
+      "canceledAt": null,
+      "webhookUrl": "https://example.com/webhook",
+      "_links": {
+        "self": {
+          "href": "https://api.mollie.com/v2/customers/cst_8wmqcHMN4U/subscriptions/sub_rVKGtNd6s3",
+          "type": "application/hal+json"
+        },
+        "customer": {
+          "href": "https://api.mollie.com/v2/customers/cst_8wmqcHMN4U",
+          "type": "application/hal+json"
+        }
+      },
+      "_customerInfo": {
+        "id": "cst_8wmqcHMN4U",
+        "name": "Jan Jansen",
+        "email": "jan.jansen@example.com"
+      }
+    },
+    {
+      "id": "sub_aB3dEf5gH7",
+      "mode": "live",
+      "createdAt": "2023-02-20T14:15:00+00:00",
+      "status": "active",
+      "amount": {
+        "value": "25.00",
+        "currency": "EUR"
+      },
+      "times": null,
+      "interval": "12 months",
+      "startDate": "2023-02-20",
+      "description": "Yearly membership",
+      "method": "directdebit",
+      "mandateId": "mdt_x9yZaB7cD",
+      "canceledAt": null,
+      "webhookUrl": "https://example.com/webhook",
+      "_links": {
+        "self": {
+          "href": "https://api.mollie.com/v2/customers/cst_9xNqDiOpQv/subscriptions/sub_aB3dEf5gH7",
+          "type": "application/hal+json"
+        },
+        "customer": {
+          "href": "https://api.mollie.com/v2/customers/cst_9xNqDiOpQv",
+          "type": "application/hal+json"
+        }
+      },
+      "_customerInfo": {
+        "id": "cst_9xNqDiOpQv",
+        "name": "Marie Pietersen",
+        "email": "marie.pietersen@example.com"
+      }
+    }
+  ]
+}
+

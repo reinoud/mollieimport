@@ -154,7 +154,7 @@ class MollieAPI:
         """
         payload = {
             "amount": {"value": f"{plan.get('amount'):.2f}", "currency": plan.get("currency", "EUR")},
-            "interval": plan.get("interval", "1 year"),
+            "interval": plan.get("interval", "12 months"),
             "description": plan.get("description", "Yearly membership"),
         }
         # Include startDate if provided (expecting a date object or ISO string)

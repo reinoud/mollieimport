@@ -19,7 +19,7 @@ def test_read_customers(tmp_path):
         ["a@example.com","A","B","NL91ABNA0417164300","ref1","01-01-2024","25,00"],
         ["bad@example.com","C","D","INVALIDIBAN","ref2","01-01-2024","10,00"],
     ]
-    # write with semicolon delimiter to mimic export.csv
+    # write with semicolon delimiter to mimic test_export.csv
     with open(p, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh, delimiter=';')
         writer.writerows(data)
